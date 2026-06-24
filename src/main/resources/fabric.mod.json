@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "blackbox",
+	"version": "${version}",
+	"name": "BlackBox",
+	"description": "Real-time performance and error telemetry, delivered straight to Discord or other ways",
+	"authors": [
+		"superstrellaa"
+	],
+	"contact": {
+		"email": "superstrellayt@gmail.com",
+		"issues": "https://github.com/superstrellaa/BlackBox/issues",
+		"sources": "https://github.com/superstrellaa/BlackBox",
+		"homepage": "https://github.com/superstrellaa"
+	},
+	"license": "MIT",
+	"icon": "assets/blackbox/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"es.superstrellaa.blackbox.BlackBox"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"custom" : {
+		"modmenu": {
+			"links": {
+				"modmenu.donate": "https://paypal.me/superstrella",
+				"modmenu.github_releases": "https://github.com/superstrellaa/BlackBox/releases",
+				"modmenu.modrinth": "https://modrinth.com/mod/BlackBox",
+				"modmenu.curseforge": "https://www.curseforge.com/minecraft/mc-mods/BlackBox"
+			}
+		}
+	}
+}
