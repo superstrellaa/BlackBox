@@ -19,6 +19,9 @@
 	"entrypoints": {
 		"main": [
 			"es.superstrellaa.blackbox.BlackBox"
+		],
+		"client": [
+			"es.superstrellaa.blackbox.BlackBoxClient"
 		]
 	},
 	"depends": {
