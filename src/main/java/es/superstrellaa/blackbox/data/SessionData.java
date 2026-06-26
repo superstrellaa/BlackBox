@@ -1,6 +1,7 @@
 package es.superstrellaa.blackbox.data;
 
 import com.sun.management.OperatingSystemMXBean;
+import es.superstrellaa.blackbox.config.BlackBoxConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
@@ -67,7 +68,9 @@ public class SessionData {
         s.sessionId = sessionId;
         s.reason = reason;
         s.sessionDurationSeconds = tracker.getDurationSeconds();
-        s.playerName = client.getSession() != null ? client.getSession().getUsername() : "unknown";
+        s.playerName = BlackBoxConfig.get().anonymous
+                ? "Anonymous"
+                : (client.getSession() != null ? client.getSession().getUsername() : "unknown");
 
         s.fpsAvg = tracker.getAvg();
         s.fpsMin = tracker.getMin();

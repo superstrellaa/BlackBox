@@ -14,20 +14,34 @@ import java.nio.file.Path;
 public class BlackBoxConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = FabricLoader.getInstance()
-            .getConfigDir()
-            .resolve("blackbox.json");
-
+    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("blackbox.json");
     private static BlackBoxConfig instance;
 
     public String webhookUrl = "";
     public boolean enabled = true;
     public int batchIntervalSeconds = 60;
 
+    public boolean anonymous = false;
+
+    public DataOptions data = new DataOptions();
+    public TriggerOptions triggers = new TriggerOptions();
+
+    public static class DataOptions {
+        public boolean fps = true;
+        public boolean memory = true;
+        public boolean hardware = true;
+        public boolean graphicsSettings = true;
+        public boolean modsList = true;
+    }
+
+    public static class TriggerOptions {
+        public boolean onDisconnect = true;
+        public boolean onCrash = true;
+        public boolean onGameClose = true;
+    }
+
     public static BlackBoxConfig get() {
-        if (instance == null) {
-            instance = load();
-        }
+        if (instance == null) instance = load();
         return instance;
     }
 
