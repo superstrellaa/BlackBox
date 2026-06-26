@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import es.superstrellaa.blackbox.config.BlackBoxConfig;
 import es.superstrellaa.blackbox.network.WebhookSender;
 import es.superstrellaa.blackbox.data.SessionData;
+import es.superstrellaa.blackbox.data.SessionSnapshot;
 
 public class BlackBoxClient implements ClientModInitializer {
 
@@ -42,9 +43,16 @@ public class BlackBoxClient implements ClientModInitializer {
             }
         });
 
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            BlackBox.LOGGER.info("BlackBox: joined a server, starting server session tracker");
+            SessionData.startServerSession();
+        });
+
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             BlackBox.LOGGER.info("BlackBox: disconnect detected, sending session report");
-            WebhookSender.sendSessionReport(SessionData.snapshot("disconnect"));
+            SessionSnapshot snapshot = SessionData.snapshot("disconnect");
+            SessionData.stopServerSession();
+            WebhookSender.sendSessionReport(snapshot);
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {

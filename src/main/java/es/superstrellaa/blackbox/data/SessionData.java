@@ -4,12 +4,9 @@ import com.sun.management.OperatingSystemMXBean;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.GraphicsMode;
-import net.minecraft.client.option.ParticlesMode;
 import es.superstrellaa.blackbox.BlackBox;
 
 import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -17,28 +14,20 @@ import java.util.stream.Collectors;
 public class SessionData {
 
     private static String sessionId;
-    private static long sessionStartMillis;
-
-    private static int frameCountThisSecond = 0;
-    private static long lastFpsSampleMillis = 0;
-
-    private static int fpsMin = Integer.MAX_VALUE;
-    private static int fpsMax = 0;
-    private static long fpsSampleSum = 0;
-    private static int fpsSampleCount = 0;
-
     private static boolean started = false;
 
     private static volatile String cachedGpuRenderer = "unknown";
     private static volatile boolean gpuRendererCaptured = false;
+
+    private static final FpsTracker gameTracker = new FpsTracker();
+    private static final FpsTracker serverTracker = new FpsTracker();
 
     public static void startSession() {
         if (started) return;
         started = true;
 
         sessionId = UUID.randomUUID().toString();
-        sessionStartMillis = System.currentTimeMillis();
-        lastFpsSampleMillis = System.currentTimeMillis();
+        gameTracker.start();
 
         WorldRenderEvents.END.register(context -> {
             if (!gpuRendererCaptured) {
@@ -50,46 +39,46 @@ public class SessionData {
                 gpuRendererCaptured = true;
             }
 
-            frameCountThisSecond++;
-
-            long now = System.currentTimeMillis();
-            if (now - lastFpsSampleMillis >= 1000) {
-                int fps = frameCountThisSecond;
-                fpsMin = Math.min(fpsMin, fps);
-                fpsMax = Math.max(fpsMax, fps);
-                fpsSampleSum += fps;
-                fpsSampleCount++;
-
-                frameCountThisSecond = 0;
-                lastFpsSampleMillis = now;
-            }
+            gameTracker.onFrame();
+            serverTracker.onFrame();
         });
 
-        BlackBox.LOGGER.info("BlackBox session started: {}", sessionId);
+        BlackBox.LOGGER.info("BlackBox game session started: {}", sessionId);
+    }
+
+    public static void startServerSession() {
+        serverTracker.start();
+        BlackBox.LOGGER.info("BlackBox server session started");
+    }
+
+    public static void stopServerSession() {
+        serverTracker.stop();
+        BlackBox.LOGGER.info("BlackBox server session stopped");
     }
 
     public static SessionSnapshot snapshot(String reason) {
         SessionSnapshot s = new SessionSnapshot();
         MinecraftClient client = MinecraftClient.getInstance();
 
+        FpsTracker tracker = "game_close".equals(reason)
+                ? gameTracker
+                : (serverTracker.everStarted() ? serverTracker : gameTracker);
+
         s.sessionId = sessionId;
         s.reason = reason;
-        s.sessionDurationSeconds = (System.currentTimeMillis() - sessionStartMillis) / 1000;
+        s.sessionDurationSeconds = tracker.getDurationSeconds();
         s.playerName = client.getSession() != null ? client.getSession().getUsername() : "unknown";
 
-        // FPS
-        s.fpsAvg = fpsSampleCount > 0 ? (int) (fpsSampleSum / fpsSampleCount) : 0;
-        s.fpsMin = fpsMin == Integer.MAX_VALUE ? 0 : fpsMin;
-        s.fpsMax = fpsMax;
+        s.fpsAvg = tracker.getAvg();
+        s.fpsMin = tracker.getMin();
+        s.fpsMax = tracker.getMax();
 
-        // Memoria
         Runtime runtime = Runtime.getRuntime();
         long usedBytes = runtime.totalMemory() - runtime.freeMemory();
         s.memoryUsedMb = usedBytes / (1024 * 1024);
         s.memoryAllocatedMb = runtime.totalMemory() / (1024 * 1024);
         s.memoryMaxMb = runtime.maxMemory() / (1024 * 1024);
 
-        // Hardware
         s.osName = System.getProperty("os.name");
         s.osVersion = System.getProperty("os.version");
         s.javaVersion = System.getProperty("java.version");
@@ -100,7 +89,6 @@ public class SessionData {
             s.cpuCores = osBean.getAvailableProcessors();
             s.totalSystemRamMb = osBean.getTotalMemorySize() / (1024 * 1024);
         } catch (Exception e) {
-            // Fallback si com.sun.management no está disponible en esta JVM
             s.cpuCores = Runtime.getRuntime().availableProcessors();
             s.totalSystemRamMb = -1;
         }
@@ -136,5 +124,74 @@ public class SessionData {
 
     public static String getSessionId() {
         return sessionId;
+    }
+
+    private static class FpsTracker {
+
+        private long startMillis;
+        private boolean active = false;
+        private boolean everStarted = false;
+
+        private int frameCountThisSecond = 0;
+        private long lastSampleMillis;
+
+        private int fpsMin = Integer.MAX_VALUE;
+        private int fpsMax = 0;
+        private long fpsSampleSum = 0;
+        private int fpsSampleCount = 0;
+
+        synchronized void start() {
+            startMillis = System.currentTimeMillis();
+            lastSampleMillis = startMillis;
+            frameCountThisSecond = 0;
+            fpsMin = Integer.MAX_VALUE;
+            fpsMax = 0;
+            fpsSampleSum = 0;
+            fpsSampleCount = 0;
+            active = true;
+            everStarted = true;
+        }
+
+        synchronized void stop() {
+            active = false;
+        }
+
+        synchronized void onFrame() {
+            if (!active) return;
+
+            frameCountThisSecond++;
+
+            long now = System.currentTimeMillis();
+            if (now - lastSampleMillis >= 1000) {
+                int fps = frameCountThisSecond;
+                fpsMin = Math.min(fpsMin, fps);
+                fpsMax = Math.max(fpsMax, fps);
+                fpsSampleSum += fps;
+                fpsSampleCount++;
+
+                frameCountThisSecond = 0;
+                lastSampleMillis = now;
+            }
+        }
+
+        synchronized int getAvg() {
+            return fpsSampleCount > 0 ? (int) (fpsSampleSum / fpsSampleCount) : 0;
+        }
+
+        synchronized int getMin() {
+            return fpsMin == Integer.MAX_VALUE ? 0 : fpsMin;
+        }
+
+        synchronized int getMax() {
+            return fpsMax;
+        }
+
+        synchronized long getDurationSeconds() {
+            return (System.currentTimeMillis() - startMillis) / 1000;
+        }
+
+        synchronized boolean everStarted() {
+            return everStarted;
+        }
     }
 }
