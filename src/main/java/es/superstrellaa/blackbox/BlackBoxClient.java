@@ -7,6 +7,7 @@ import es.superstrellaa.blackbox.config.BlackBoxConfig;
 import es.superstrellaa.blackbox.network.WebhookSender;
 import es.superstrellaa.blackbox.data.SessionData;
 import es.superstrellaa.blackbox.data.SessionSnapshot;
+import es.superstrellaa.blackbox.debug.CrashTester;
 
 public class BlackBoxClient implements ClientModInitializer {
 
@@ -22,43 +23,38 @@ public class BlackBoxClient implements ClientModInitializer {
         WebhookSender.start();
         SessionData.startSession();
 
-        Thread.UncaughtExceptionHandler previousHandler =
-                Thread.getDefaultUncaughtExceptionHandler();
-
+        Thread.UncaughtExceptionHandler previousHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
-            BlackBox.LOGGER.error("BlackBox: uncaught exception detected on thread {}", thread.getName());
-
+            BlackBox.LOGGER.error("BlackBox: uncaught exception on thread {}", thread.getName());
             try {
                 WebhookSender.sendErrorReport(
                         throwable,
                         "Uncaught exception on thread: " + thread.getName(),
                         SessionData.snapshot("error")
                 );
+                WebhookSender.awaitFlush(5000);
             } catch (Exception e) {
                 BlackBox.LOGGER.error("BlackBox: failed to report uncaught exception", e);
             }
-
-            if (previousHandler != null) {
-                previousHandler.uncaughtException(thread, throwable);
-            }
+            if (previousHandler != null) previousHandler.uncaughtException(thread, throwable);
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            BlackBox.LOGGER.info("BlackBox: joined a server, starting server session tracker");
             SessionData.startServerSession();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            BlackBox.LOGGER.info("BlackBox: disconnect detected, sending session report");
             SessionSnapshot snapshot = SessionData.snapshot("disconnect");
             SessionData.stopServerSession();
             WebhookSender.sendSessionReport(snapshot);
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-            BlackBox.LOGGER.info("BlackBox: game stopping, sending final report");
             WebhookSender.sendSessionReport(SessionData.snapshot("game_close"));
             WebhookSender.shutdown();
         });
+
+        // el crash funciona, la cosa esta ya se puede quedar comentada
+        //CrashTester.scheduleTestCrash();
     }
 }
